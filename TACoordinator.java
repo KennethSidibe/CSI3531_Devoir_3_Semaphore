@@ -1,3 +1,5 @@
+import java.util.Random;
+
 // This class is responsible for processing all the 
 // logic necessary so that the TA 
 // can focus on helping Student and not the 
@@ -13,6 +15,8 @@ public class TACoordinator {
     private boolean waitRoomFull = false;
     private int StudentLineCursor = -1;
     public Student[] line = new Student[this.waitChairs];
+    private boolean napping = false;
+    private Thread napsThread;
 
     public boolean enqueue(Student newStudent) {
 
@@ -75,17 +79,45 @@ public class TACoordinator {
     }
 
     public boolean isTaAvailable() {
-        return false;
+        return waitRoomFull;
     }
 
     public void taNaps() {
+
+        int maxSleepTime = 10000;
+        int minSleepTime = 5000;
+        int sleepTime = new Random().nextInt(maxSleepTime - minSleepTime) + minSleepTime;
+        final int sleepIncrementConstant = 1000;
+
+        napsThread = new Thread(() -> {
+            try {
+
+                for (int i = 0; i <= sleepTime; i+=sleepIncrementConstant) {
+                    System.out.println("Zzz");
+                    Thread.sleep(sleepIncrementConstant);
+                }
+
+                System.out.println("Ta finishes napping");
+                
+            }
+            catch (InterruptedException e) {
+                System.out.println("TA got waked up");
+            }
+        });
+
+        napsThread.start();
 
     }
 
     public void wakeTaUp() {
 
+        if(!Thread.interrupted()) {
+            napsThread.interrupt();
+        }
+        else {
+            System.out.println("Ta is already awake !");
+        }
+        
     }
-
-
     
 }
