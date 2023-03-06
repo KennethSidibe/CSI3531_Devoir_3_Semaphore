@@ -1,4 +1,5 @@
 import java.util.Random;
+import java.util.concurrent.locks.ReentrantLock;
 
 // This class is responsible for processing all the 
 // logic necessary so that the TA 
@@ -11,13 +12,18 @@ import java.util.Random;
 
 public class TACoordinator {
 
+    private final ReentrantLock lock = new ReentrantLock();
     private int waitChairs = 3;
     private boolean waitRoomFull = false;
     private int StudentLineCursor = -1;
     public Student[] line = new Student[this.waitChairs];
     private boolean napping = false;
-    private Thread napsThread;
-
+    private boolean helping = false;
+    private boolean studentWaiting = false;
+    private Thread napThread;
+    private Thread helpingThread;
+    private Thread studentWaitingThread;
+    
     public boolean enqueue(Student newStudent) {
 
         if(StudentLineCursor >= line.length - 1 ) {
@@ -74,22 +80,111 @@ public class TACoordinator {
 
         else {
             System.out.println("Wait office is empty");
-            return new Student();
+            return new Student(null);
         }
     }
 
-    public boolean isTaAvailable() {
-        return waitRoomFull;
-    }
+    public void studentWaits() {
 
-    public void taNaps() {
+        lock.lock();
+        try {
+            studentWaiting = true;
+        } finally {
+            lock.unlock();
+        }
 
-        int maxSleepTime = 10000;
-        int minSleepTime = 5000;
+        int maxSleepTime = 5000;
+        int minSleepTime = 1000;
         int sleepTime = new Random().nextInt(maxSleepTime - minSleepTime) + minSleepTime;
         final int sleepIncrementConstant = 1000;
 
-        napsThread = new Thread(() -> {
+        studentWaitingThread = new Thread(() -> {
+            try {
+
+                for (int i = 0; i <= sleepTime; i+=sleepIncrementConstant) {
+                    System.out.println("student is waiting");
+                    Thread.sleep(sleepIncrementConstant);
+                }
+
+                System.out.println("student finished waiting");
+                lock.lock();
+                try {
+                    studentWaiting = false;
+                } finally {
+                    lock.unlock();
+                }
+                
+            }
+            catch (InterruptedException e) {
+                lock.lock();
+                try {
+                    helping = false;
+                } finally {
+                    lock.unlock();
+                }
+                System.out.println("student stopped waiting");
+            }
+        });
+
+        studentWaitingThread.start();
+    }
+
+    public void taHelps() {
+
+        this.dequeue();
+
+        lock.lock();
+        try {
+            helping = true;
+        } finally {
+            lock.unlock();
+        }
+
+        int maxSleepTime = 5000;
+        int minSleepTime = 1000;
+        int sleepTime = new Random().nextInt(maxSleepTime - minSleepTime) + minSleepTime;
+        final int sleepIncrementConstant = 1000;
+
+        helpingThread = new Thread(() -> {
+            try {
+
+                for (int i = 0; i <= sleepTime; i+=sleepIncrementConstant) {
+                    System.out.println("Ta is helping student");
+                    Thread.sleep(sleepIncrementConstant);
+                }
+
+                System.out.println("Ta finished helping");
+                lock.lock();
+                try {
+                    helping = false;
+                } finally {
+                    lock.unlock();
+                }
+                
+            }
+            catch (InterruptedException e) {
+                lock.lock();
+                try {
+                    helping = false;
+                } finally {
+                    lock.unlock();
+                }
+                System.out.println("TA interrupted helping");
+            }
+        });
+
+        helpingThread.start();
+        
+    }
+
+    public void taNaps() {
+        
+        int maxSleepTime = 5000;
+        int minSleepTime = 1000;
+        int sleepTime = new Random().nextInt(maxSleepTime - minSleepTime) + minSleepTime;
+        final int sleepIncrementConstant = 1000;
+
+        napThread = new Thread(() -> {
             try {
 
                 for (int i = 0; i <= sleepTime; i+=sleepIncrementConstant) {
@@ -98,26 +193,64 @@ public class TACoordinator {
                 }
 
                 System.out.println("Ta finishes napping");
+                lock.lock();
+                try {
+                    napping = false;
+                } finally {
+                    lock.unlock();
+                }
                 
             }
             catch (InterruptedException e) {
+
+                lock.lock();
+                try {
+                    napping = false;
+                } finally {
+                    lock.unlock();
+                }
+
                 System.out.println("TA got waked up");
             }
         });
 
-        napsThread.start();
-
+        napThread.start();
+        lock.lock();
+        try {
+            napping = true;
+        } finally {
+            lock.unlock();
+        }
     }
 
     public void wakeTaUp() {
 
-        if(!Thread.interrupted()) {
-            napsThread.interrupt();
-        }
-        else {
-            System.out.println("Ta is already awake !");
+        try {
+            if(!Thread.interrupted()) {
+                napThread.interrupt();
+            }
+            else {
+                System.out.println("Ta is already awake !");
+            }
+        } catch(Exception e) {
+            System.out.println("no thread is running");
         }
         
+    }
+
+    public synchronized boolean isTaNapping() {
+        return napping;
+    }
+
+    public synchronized boolean isTaHelpingStudent() {
+        return helping;
+    }
+    public synchronized boolean isStudentWaiting() {
+        return studentWaiting;
+    }
+
+    public synchronized boolean isTaAvailable() {
+        return waitRoomFull;
     }
     
 }
