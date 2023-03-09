@@ -1,3 +1,4 @@
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.Random;
 import java.util.UUID;
@@ -46,10 +47,27 @@ public class Student implements Runnable {
 
         System.out.println("Student" + name + " is now waiting for a spot ");
         
-        while(!(this.taBrain.isSpotAvailable())) {
-            programs();
+        while( taBrain.isTaRoomFull() ) {
+
+            lock.lock(); 
+            try {
+                if(this.isStudentProgrammingThreadRunning == false) {
+                    try {
+
+                        this.isStudentProgrammingThreadRunning = true;
+
+                        this.programs();
+                    } catch(Exception e) {
+                        System.out.println("exception caught : " + e);
+                    }
+
+                }
+            } finally {
+                lock.unlock();
+            }
         }
 
+        studentProgrammingThread.interrupt();
         System.out.println("Student" + name + " found a spot");
 
         taBrain.enqueue(this);
@@ -81,15 +99,16 @@ public class Student implements Runnable {
             try {
                 
                 for (int i = 0; i <= sleepTime; i+=sleepIncrementConstant) {
-                    System.out.println("student" + this.id + " is programming");
+                    System.out.println("student" + this.name + " is programming");
                     Thread.sleep(sleepIncrementConstant);
                 }
 
-                System.out.println("student " + this.id + " suspended programming");
+                System.out.println("student " + this.name + " stopped programming");
 
                 lock.lock();
                 try {
                     studentProgramming = false;
+                    this.isStudentProgrammingThreadRunning= false;
                 } finally {
                     lock.unlock();
                 }
@@ -99,28 +118,31 @@ public class Student implements Runnable {
                 lock.lock();
                 try {
                     studentProgramming = false;
+                    this.isStudentProgrammingThreadRunning= false;
                 } finally {
                     lock.unlock();
                 }
-                System.out.println("student " + this.id + " stopped programming");
+                System.out.println("student " + this.name + " suspended programming");
             }
         });
 
         studentProgrammingThread.start();
-
     }
+
 
     public void waitForHelp() {
 
-        System.out.println("Student" + name + " is now waiting for TA helps ");
+        System.out.println("Student" + name + " is now waiting for TA helps \n");
 
         while( taBrain.isTaHelpingStudent() ) {
 
             lock.lock(); 
             try {
-                if(this.isStudentProgrammingThreadRunning) {
+                if(this.isStudentProgrammingThreadRunning == false) {
                     try {
+
                         this.isStudentProgrammingThreadRunning = true;
+
                         this.programs();
                     } catch(Exception e) {
                         System.out.println("exception caught : " + e);
@@ -130,9 +152,9 @@ public class Student implements Runnable {
             } finally {
                 lock.unlock();
             }
-            
         }
 
+        studentProgrammingThread.interrupt();
         System.out.println("Student " + name +" can get help now");
     }
 
@@ -145,9 +167,9 @@ public class Student implements Runnable {
 
         // uncomment the two things en bas
 
-        // waitForASpot();
+        waitForASpot();
 
-        waitForHelp();
+        // waitForHelp();
 
         // leaves();
 
