@@ -3,23 +3,66 @@ import java.util.Arrays;
 public class Main {
     public static void main(String[] args) {
 
+        TeacherAssistant tAssistant = new TeacherAssistant();
+        Student[] studentsList = TaOfficeSimulator.
+                            generateStudentsList(10);
 
-        TACoordinator testCoordinator = new TACoordinator();
+        TACoordinator taBrain = new TACoordinator(tAssistant, studentsList);
+        
+        System.out.println(Arrays.deepToString(taBrain.getAllStudentsToHelpName()));
+        
+        System.out.println("studentsRemainingFlag: "+taBrain.areStudentsToHelpRemaining()+"\n\n");
 
-        Student testStudent1 = new Student();
-        Student testStudent2 = new Student();
-        Student testStudent3 = new Student();
+        
+        taBrain.start();
 
-        testCoordinator.enqueue(testStudent1);
-        testCoordinator.enqueue(testStudent2);
-
-        testCoordinator.taNaps();
         try {
-            Thread.sleep(1000);
-            System.out.println("waking up TA \n");
-        }catch (InterruptedException e) {
-        }
-        testCoordinator.wakeTaUp();
+            Thread.sleep(2000);
+            System.out.println(Arrays.deepToString(taBrain.getAllStudentsInWaitRoomName()));
+            System.out.println("Original wait room");
+        } catch (Exception e) {}
+
+        System.out.println("\n");
+
+        try {
+            Thread.sleep(5000);
+            System.out.println("dequeuing next student \n");
+            taBrain.dequeue();
+        } catch (Exception e) {}
+
+
+        System.out.println("\n");
+
+        try {
+            Thread.sleep(2000);
+            System.out.println("Updated wait room \n");
+            System.out.println(Arrays.deepToString(taBrain.getAllStudentsInWaitRoomName()));
+        } catch (Exception e) {}
+
+        System.out.println("\n");
+        
+
+        try {
+            Thread.sleep(5000);
+            System.out.println("dequeuing next student \n");
+            taBrain.dequeue();
+        } catch (Exception e) {}
+
+        System.out.println("\n");
+
+
+        try {
+            Thread.sleep(2000);
+            System.out.println("Updated wait room \n");
+            System.out.println(Arrays.deepToString(taBrain.getAllStudentsInWaitRoomName()));
+        } catch (Exception e) {}
+
+        System.out.println("\n");
+
+        taBrain.interruptFillThread();
+        
+        taBrain.interruptTaCoordinatorThread();
+        
 
     }
 }
