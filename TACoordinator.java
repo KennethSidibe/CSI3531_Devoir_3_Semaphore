@@ -1,4 +1,3 @@
-import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
 // This class is responsible for processing all the 
@@ -10,217 +9,179 @@ import java.util.concurrent.locks.ReentrantLock;
 // Kenneth Sidibe
 // 300099184
 
-public class TACoordinator {
+public class TACoordinator implements Runnable {
 
-    private final ReentrantLock lock = new ReentrantLock();
-    private int waitChairs = 3;
+    private ReentrantLock lock = new ReentrantLock();
+    private TeacherAssistant tAssistant = new TeacherAssistant();
+    
     private boolean waitRoomFull = false;
-    private int StudentLineCursor = -1;
-    public Student[] line = new Student[this.waitChairs];
+    private boolean waitRoomEmpty = true;
+    
+    private int waitCursor = -1;
+    private Student[] waitRoom = new Student[waitChairs];
+
+    private Student[] studentsToHelp = new Student[maxServerCapacity];
+    private int studentHelpIndex = 0;
+    private int lastStudentHelpCursor = 0;
+    
     private boolean napping = false;
     private boolean helping = false;
     private boolean studentWaiting = false;
+    private boolean noStudentToHelp = false;
+
+    private boolean manageQueueThreadRunnig = false;
+    private boolean manageTaThreadRunnig = false;
+    private boolean manageStudentsThreadRunnig = false;
+    private boolean fillWaitRoomThreadRunning = false;
+
     private Thread napThread;
     private Thread helpingThread;
-    private Thread studentWaitingThread;
-    
-    public boolean enqueue(Student newStudent) {
+    private Thread fillThread;
+    private Thread dequeueThread;
 
-        if(StudentLineCursor >= line.length - 1 ) {
-            waitRoomFull = true;
+    private Thread taCoordinatorThread;
+    
+    private static final int waitChairs = 3;
+    private static final int maxServerCapacity = 100;
+    
+    TACoordinator(TeacherAssistant tAssistant, Student[] studentsToHelpInitList) {
+
+        this.tAssistant = tAssistant;
+        this.lastStudentHelpCursor = studentsToHelpInitList.length-1;
+        this.taCoordinatorThread = new Thread(this);
+
+        if(studentsToHelpInitList.length == maxServerCapacity) {
+            this.studentsToHelp = studentsToHelpInitList;
         }
 
+        else {
+            for (int i = 0; i < studentsToHelpInitList.length; i++) {
+                this.studentsToHelp[i] = studentsToHelpInitList[i];
+            }
+        }
+
+    }
+
+    public void enqueue(Student newStudent) {
+
+        
         if(waitRoomFull) {
             System.out.println("Wait office is full, Student needs to come back later");
-            return false;
         }
+        
         else {
-            StudentLineCursor++;
-            line[StudentLineCursor] = newStudent;
-            return true;
+
+            waitCursor++;
+            waitRoom[waitCursor] = newStudent;
+            
+            if(waitCursor >= waitRoom.length - 1) {
+                waitRoomFull = true;
+            }
+
         }
+        
+    }
+
+    private void fillThreadMethod() {
+
+        while( !(isWaitRoomFull()) || areStudentsToHelpRemaining() ) {
+
+            if(Thread.interrupted()) {
+                System.out.println("thread interrupted\n");
+                break;
+            }
+
+            lock.lock();
+            try {
+                if(isFillWaitRoomThreadRunning() == false){
+
+                    lock.lock();
+                    try {
+                        fillWaitRoomThreadRunning = true;
+                    } finally {
+                        lock.unlock();
+                    }
+
+                    fillWaitRoom();
+                }
+            } finally {
+                lock.unlock();
+            }
+
+        }
+
+        System.out.println("students filled finished");
+        
+    }
+
+    public void manageQueue() {
+        
+    }
+
+    public void removeStudentFromStudentsToHelp() {
+        if(studentHelpIndex > lastStudentHelpCursor) {
+            return;
+        }
+
+        studentsToHelp[studentHelpIndex] = null;
+        studentHelpIndex++;
     }
 
     public Student dequeue() {
 
-        if(StudentLineCursor == 0) {
-            Student studentFinishWait = line[0];
-            line[0] = null;
-            StudentLineCursor--;
+        waitRoomFull = false;
+
+        // 1 student in wait room
+        if(waitCursor == 0) {
+            
+            Student studentFinishWait = waitRoom[0];
+            waitRoom[0] = null;
+            waitCursor--;
+
             return studentFinishWait;
         }
 
-        else if (StudentLineCursor == 1) {
-            Student studentFinishWait = line[0];
-            line[0] = null;
+        // 2 student in wait room
+        else if (waitCursor == 1) {
+            Student studentFinishWait = waitRoom[0];
+            waitRoom[0] = null;
 
-            line[0] = line[1];
-            line[1] = null;
-            StudentLineCursor--;
+            // placing remaining student in queue
+            waitRoom[0] = waitRoom[1];
+            waitRoom[1] = null;
+
+            waitCursor--;
+
             return studentFinishWait;
         }
-       else if (StudentLineCursor > 1) {
+        
+        // More than 2 student
+        else if (waitCursor > 1) {
 
-            Student studentFinishWait = line[0];
+            Student studentFinishWait = waitRoom[0];
 
-            for(int i = StudentLineCursor; i > 1; i --) {
+            for(int i = waitCursor; i > 1; i --) {
                 
-                line[0] = null;
+                waitRoom[0] = null;
 
-                Student tempStudent = line[i-1];
-                line[i-1] = line[i];
-                line[i] = null;
-                line[i-2] = tempStudent;
+                Student tempStudent = waitRoom[i-1];
+                waitRoom[i-1] = waitRoom[i];
+                waitRoom[i] = null;
+                waitRoom[i-2] = tempStudent;
 
-                StudentLineCursor--;
+                waitCursor--;
             }
 
             return studentFinishWait;
         }
 
+        // No student in queue
         else {
             System.out.println("Wait office is empty");
+            waitRoomEmpty = true;
             return new Student(null);
         }
-    }
 
-    public void studentWaits() {
-
-        lock.lock();
-        try {
-            studentWaiting = true;
-        } finally {
-            lock.unlock();
-        }
-
-        int maxSleepTime = 5000;
-        int minSleepTime = 1000;
-        int sleepTime = new Random().nextInt(maxSleepTime - minSleepTime) + minSleepTime;
-        final int sleepIncrementConstant = 1000;
-
-        studentWaitingThread = new Thread(() -> {
-            try {
-
-                for (int i = 0; i <= sleepTime; i+=sleepIncrementConstant) {
-                    System.out.println("student is waiting");
-                    Thread.sleep(sleepIncrementConstant);
-                }
-
-                System.out.println("student finished waiting");
-                lock.lock();
-                try {
-                    studentWaiting = false;
-                } finally {
-                    lock.unlock();
-                }
-                
-            }
-            catch (InterruptedException e) {
-                lock.lock();
-                try {
-                    helping = false;
-                } finally {
-                    lock.unlock();
-                }
-                System.out.println("student stopped waiting");
-            }
-        });
-
-        studentWaitingThread.start();
-    }
-
-    public void taHelps() {
-
-        this.dequeue();
-
-        lock.lock();
-        try {
-            helping = true;
-        } finally {
-            lock.unlock();
-        }
-
-        int maxSleepTime = 5000;
-        int minSleepTime = 1000;
-        int sleepTime = new Random().nextInt(maxSleepTime - minSleepTime) + minSleepTime;
-        final int sleepIncrementConstant = 1000;
-
-        helpingThread = new Thread(() -> {
-            try {
-
-                for (int i = 0; i <= sleepTime; i+=sleepIncrementConstant) {
-                    System.out.println("Ta is helping student");
-                    Thread.sleep(sleepIncrementConstant);
-                }
-
-                System.out.println("Ta finished helping");
-                lock.lock();
-                try {
-                    helping = false;
-                } finally {
-                    lock.unlock();
-                }
-                
-            }
-            catch (InterruptedException e) {
-                lock.lock();
-                try {
-                    helping = false;
-                } finally {
-                    lock.unlock();
-                }
-                System.out.println("TA interrupted helping");
-            }
-        });
-
-        helpingThread.start();
-        
-    }
-
-    public void taNaps() {
-        
-        int maxSleepTime = 5000;
-        int minSleepTime = 1000;
-        int sleepTime = new Random().nextInt(maxSleepTime - minSleepTime) + minSleepTime;
-        final int sleepIncrementConstant = 1000;
-
-        napThread = new Thread(() -> {
-            try {
-
-                for (int i = 0; i <= sleepTime; i+=sleepIncrementConstant) {
-                    System.out.println("Zzz");
-                    Thread.sleep(sleepIncrementConstant);
-                }
-
-                System.out.println("Ta finishes napping");
-                lock.lock();
-                try {
-                    napping = false;
-                } finally {
-                    lock.unlock();
-                }
-                
-            }
-            catch (InterruptedException e) {
-
-                lock.lock();
-                try {
-                    napping = false;
-                } finally {
-                    lock.unlock();
-                }
-
-                System.out.println("TA got waked up");
-            }
-        });
-
-        napThread.start();
-        lock.lock();
-        try {
-            napping = true;
-        } finally {
-            lock.unlock();
-        }
     }
 
     public void wakeTaUp() {
@@ -238,6 +199,36 @@ public class TACoordinator {
         
     }
 
+    private void fillWaitRoom() {
+        
+        for (int i = studentHelpIndex; i < studentsToHelp.length; i++) {
+
+            if(isWaitRoomFull()) {
+                break;
+            }
+
+            enqueue(studentsToHelp[studentHelpIndex]);
+            removeStudentFromStudentsToHelp();
+            
+        }
+
+        lock.lock();
+        try {
+            fillWaitRoomThreadRunning = false;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void passNextStudentToTa() {
+
+    } 
+
+    private synchronized boolean isFillWaitRoomThreadRunning() {
+        return this.fillWaitRoomThreadRunning;
+    }
+    
+    
     public synchronized boolean isTaNapping() {
         return napping;
     }
@@ -245,12 +236,111 @@ public class TACoordinator {
     public synchronized boolean isTaHelpingStudent() {
         return helping;
     }
+
     public synchronized boolean isStudentWaiting() {
         return studentWaiting;
     }
 
-    public synchronized boolean isTaAvailable() {
-        return waitRoomFull;
+    public synchronized void taIsNowAvailable() {
+        this.helping = false;
+    }
+
+    public synchronized void taIsNotAvailableAnymore() {
+        this.helping = true;
     }
     
+    public synchronized boolean isWaitRoomFull() {
+        
+        waitRoomFull = waitRoom[waitRoom.length - 1] != null;
+        return waitRoom[waitRoom.length-1] != null;
+
+    }
+    
+    public synchronized boolean isWaitRoomEmpty() {
+
+        for (int i = 0; i < waitRoom.length; i++) {
+            if(waitRoom[i] != null) {
+                waitRoomEmpty = false;
+                return false;
+            }
+        }
+
+        waitRoomEmpty = true;
+        return true;
+
+    }
+
+    public Student[] getStudents() {
+        return this.studentsToHelp;
+    }
+
+    public String[] getAllStudentsToHelpName() {
+        String[] nameList = new String[this.lastStudentHelpCursor+1];
+
+        for (int i = 0; i < nameList.length; i++) {
+            nameList[i] = studentsToHelp[i].getName();
+        }
+
+        return nameList;
+
+    }
+
+    public String[] getAllStudentsInWaitRoomName() {
+
+        String[] nameList = new String[waitRoom.length];
+
+        for (int i = 0; i < nameList.length; i++) {
+            Student student = waitRoom[i];
+            if(student == null) {
+                break;
+            }
+            nameList[i] = student.getName();
+        }
+
+        return nameList;
+    }
+
+    public void interruptFillThread() {
+        this.fillThread.interrupt();
+    }
+
+    public void interruptTaCoordinatorThread() {
+        this.taCoordinatorThread.interrupt();
+    }
+
+    public synchronized boolean areStudentsToHelpRemaining() {
+        return studentsToHelp[studentHelpIndex] != null;
+    }
+
+    @Override
+    public void run() {
+
+        fillThread = new Thread(() -> fillThreadMethod());
+        fillThread.start();
+
+    }
+
+    public void start() {
+        
+        this.taCoordinatorThread.start();
+
+    }
+
+    // v2 feature
+    public void appendNewStudentsToHelp(Student[] newStudentsToHelp) {
+
+        int newStudentCursor = 0;
+
+        if(newStudentsToHelp.length == maxServerCapacity) {
+            System.out.println("new student list is too large");
+            return;
+        }
+
+        for (int i = lastStudentHelpCursor; i < studentsToHelp.length && newStudentCursor < newStudentsToHelp.length; i++) {
+            this.studentsToHelp[i] = newStudentsToHelp[newStudentCursor];
+            newStudentCursor++;
+        }
+        
+    }
+
 }
