@@ -12,13 +12,8 @@ public class TaOfficeSimulator implements Runnable {
     private TACoordinator taBrain;
     
     
-    TaOfficeSimulator(int studentNumber) {
-
-        this.studentNumber = studentNumber;
-        this.students = new Student[studentNumber];
-        this.studentThreads = new Thread[studentNumber];
-        this.taBrain = new TACoordinator();
-        
+    TaOfficeSimulator() {
+        // TODO
     }
 
     public static String generateRandomName() {
@@ -37,13 +32,7 @@ public class TaOfficeSimulator implements Runnable {
 
     public void simulate() {
 
-        for (int i = 0; i < students.length; i++) {
-
-            Student newStudent = new Student();
-
-            students[i] = newStudent;
-            studentThreads[i] = newStudent.getStudentThread();
-        }
+        //TODO
         
     }
 
@@ -65,17 +54,8 @@ public class TaOfficeSimulator implements Runnable {
 
     public void start() { 
 
-        System.out.println("here are all the students : "+Arrays.deepToString(getAllStudentName()));
-        System.out.println();
-
-        System.out.println("here are all the students that are in the waiting room : "+Arrays.deepToString(getTaBrain().getAllStudentsInWaitRoomName()));
-        System.out.println();
-
-        System.out.println("starting office\n\n");
-
-        taBrain.start();
-
-        this.run();
+        // TODO
+        
     }
 
     public TACoordinator getTaBrain() {
