@@ -1,30 +1,28 @@
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.Random;
 import java.util.UUID;
 
 public class Student implements Runnable {
 
-    private Thread studentProgrammingThread;
-    private boolean isStudentProgrammingThreadRunning = false;
-    private Thread runningThread;
     private final ReentrantLock lock = new ReentrantLock();
+    private Thread studentProgrammingThread;
+    private Thread runningThread;
+    
+    private boolean isStudentProgrammingThreadRunning = false;
     private boolean studentProgramming = false;
-    private boolean studentWaitingHelp = false;
+    private boolean studentCanGetHelp = false;
+
     private String name;
     private UUID id = UUID.randomUUID();
 
-    private TACoordinator taBrain;
-
-    Student(String name, TACoordinator taBrain) {
+    Student(String name) {
         this.name = name;
-        this.taBrain = taBrain;
         this.runningThread = new Thread(this);
     }
 
-    Student(TACoordinator taBrain) {
-        this.name = "pierre";
-        this.taBrain = taBrain;
+    Student() {
+        this.name = TaOfficeSimulator.generateRandomName();
+        this.runningThread = new Thread(this);
     }
  
     public void askForHelp() {
@@ -36,41 +34,15 @@ public class Student implements Runnable {
     }
 
     public synchronized boolean isStudentWaitingForHelp() {
-        return this.studentWaitingHelp;
+        return this.studentCanGetHelp;
     }
 
     public synchronized boolean isStudentProgramming() {
         return this.studentProgramming;
     }
 
-    public synchronized void waitForASpot() {
-
-        System.out.println("Student" + name + " is now waiting for a spot ");
-        
-        while( taBrain.isTaRoomFull() ) {
-
-            lock.lock(); 
-            try {
-                if(this.isStudentProgrammingThreadRunning == false) {
-                    try {
-
-                        this.isStudentProgrammingThreadRunning = true;
-
-                        this.programs();
-                    } catch(Exception e) {
-                        System.out.println("exception caught : " + e);
-                    }
-
-                }
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        studentProgrammingThread.interrupt();
-        System.out.println("Student" + name + " found a spot");
-
-        taBrain.enqueue(this);
+    public synchronized void endWait() {
+        studentCanGetHelp = true;
     }
 
     public UUID getStudentId() {
@@ -130,17 +102,20 @@ public class Student implements Runnable {
     }
 
 
+    public synchronized boolean canStudentGetHelp() {
+        return studentCanGetHelp;
+    }
+
     public void waitForHelp() {
 
-        System.out.println("Student" + name + " is now waiting for TA helps \n");
+        System.out.println("Student" + name + " is waiting for Ta helps \n");
 
-        while( taBrain.isTaHelpingStudent() ) {
+        while( !(canStudentGetHelp()) ) {
 
             lock.lock(); 
             try {
                 if(this.isStudentProgrammingThreadRunning == false) {
                     try {
-
                         this.isStudentProgrammingThreadRunning = true;
 
                         this.programs();
@@ -155,7 +130,7 @@ public class Student implements Runnable {
         }
 
         studentProgrammingThread.interrupt();
-        System.out.println("Student " + name +" can get help now");
+        System.out.println("Student " + name +" can get help now\n\n");
     }
 
     public void leaves() {
@@ -165,13 +140,7 @@ public class Student implements Runnable {
     @Override
     public void run() {
 
-        // uncomment the two things en bas
-
-        waitForASpot();
-
-        // waitForHelp();
-
-        // leaves();
+        
 
     }
 
